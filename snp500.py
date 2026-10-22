@@ -154,14 +154,16 @@ def save_sent_alerts(session_date, sent_alerts):
     logger.warning(f"Failed to save {SENT_ALERTS_FILE}: {e}")
 
 
-# 같은 날 같은 종목·신호는 한 번만 전송
+# 같은 날 같은 종목·신호는 한 번만 전송 (새로 보냈으면 True)
 def send_alert_once(sent_alerts, session_date, key, message):
   if key in sent_alerts:
     logger.info(f"{key}: already alerted on {session_date} - skipped")
-    return
+    return False
   if send_telegram_message(message):
     sent_alerts.add(key)
     save_sent_alerts(session_date, sent_alerts)
+    return True
+  return False
 
 
 # Heartbeat 기능
@@ -194,6 +196,8 @@ def run_cross_check():
 
   golden_crosses = []
   dead_crosses = []
+  new_golden_count = 0
+  new_dead_count = 0
   failed_count = 0
 
   # 미국장 기준 날짜 (뉴욕 시간)
@@ -214,7 +218,8 @@ def run_cross_check():
         f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
       )
       logger.info(f"Golden Cross: {ticker} ({company_name})")
-      send_alert_once(sent_alerts, session_date, f"{ticker}:golden", msg)
+      if send_alert_once(sent_alerts, session_date, f"{ticker}:golden", msg):
+        new_golden_count += 1
     elif result == 'dead':
       dead_crosses.append((ticker, price))
       msg = (
@@ -224,7 +229,8 @@ def run_cross_check():
         f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
       )
       logger.info(f"Dead Cross: {ticker} ({company_name})")
-      send_alert_once(sent_alerts, session_date, f"{ticker}:dead", msg)
+      if send_alert_once(sent_alerts, session_date, f"{ticker}:dead", msg):
+        new_dead_count += 1
     elif price is None:
       failed_count += 1
 
@@ -236,17 +242,23 @@ def run_cross_check():
         f"[{i + 1}/{total}] {ticker} - {result or 'None'}. Price: {price_str}. "
         f"⏱ Ticker: {ticker_elapsed:.2f}s | Total: {total_elapsed:.2f}s")
 
+  logger.info(
+      f"Scan completed. Golden: {len(golden_crosses)} (new {new_golden_count}), "
+      f"Dead: {len(dead_crosses)} (new {new_dead_count}), Failed: {failed_count}")
+
+  # 새로 알린 신호가 있을 때만 요약 전송
+  if new_golden_count == 0 and new_dead_count == 0:
+    logger.info("No new signals - summary not sent")
+    return
+
   summary_msg = (
     f"📊 <b>S&P 500 스캔 완료</b>\n\n"
     f"🕒 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-    f"📈 Golden Cross: {len(golden_crosses)}개\n"
-    f"📉 Dead Cross: {len(dead_crosses)}개\n"
+    f"📈 Golden Cross: {len(golden_crosses)}개 (신규 {new_golden_count})\n"
+    f"📉 Dead Cross: {len(dead_crosses)}개 (신규 {new_dead_count})\n"
     f"❌ 실패: {failed_count}개\n"
     f"⏱ 총 소요시간: {time.time() - start_time:.1f}초"
   )
-
-  logger.info(
-      f"Scan completed. Golden: {len(golden_crosses)}, Dead: {len(dead_crosses)}, Failed: {failed_count}")
   send_telegram_message(summary_msg)
 
 
