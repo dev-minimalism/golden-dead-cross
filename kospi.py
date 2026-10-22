@@ -1,3 +1,4 @@
+import json
 import os
 import requests
 import threading
@@ -8,6 +9,9 @@ from pykrx import stock
 # ===== 텔레그램 설정 =====
 TELEGRAM_TOKEN = os.getenv('KOSPI_GOLDEN_DEAD_CROSS_TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('KOSPI_GOLDEN_DEAD_CROSS_TELEGRAM_CHAT_ID')
+
+# 당일 이미 보낸 알림 기록 (같은 신호 중복 전송 방지)
+SENT_ALERTS_FILE = 'kospi_sent_alerts.json'
 
 
 # ===== 하드코딩된 KOSPI200 일부 (전체 확장 가능) =====
@@ -272,8 +276,44 @@ def send_telegram_message(message):
     response = requests.post(url, data=payload)
     if response.status_code != 200:
       print("Telegram error:", response.text)
+      return False
+    return True
   except Exception as e:
     print(f"Telegram exception: {e}")
+    return False
+
+
+# ===== 중복 알림 방지 =====
+def load_sent_alerts(session_date):
+  """당일 보낸 알림 불러오기 (날짜가 바뀌면 빈 기록으로 시작)"""
+  try:
+    with open(SENT_ALERTS_FILE, encoding='utf-8') as f:
+      data = json.load(f)
+    if data.get('date') == session_date:
+      return set(data.get('sent', []))
+  except FileNotFoundError:
+    pass
+  except Exception as e:
+    print(f"[!] Failed to load {SENT_ALERTS_FILE}: {e}")
+  return set()
+
+
+def save_sent_alerts(session_date, sent_alerts):
+  try:
+    with open(SENT_ALERTS_FILE, 'w', encoding='utf-8') as f:
+      json.dump({'date': session_date, 'sent': sorted(sent_alerts)}, f)
+  except Exception as e:
+    print(f"[!] Failed to save {SENT_ALERTS_FILE}: {e}")
+
+
+def send_alert_once(sent_alerts, session_date, key, message):
+  """같은 날 같은 종목·신호는 한 번만 전송"""
+  if key in sent_alerts:
+    print(f"{key}: already alerted on {session_date} - skipped")
+    return
+  if send_telegram_message(message):
+    sent_alerts.add(key)
+    save_sent_alerts(session_date, sent_alerts)
 
 
 # ===== Heartbeat 기능 =====
@@ -306,6 +346,8 @@ def run_cross_check():
   total = len(tickers)
   start_time = time.time()
   fail_count = 0
+  session_date = datetime.now().strftime('%Y-%m-%d')
+  sent_alerts = load_sent_alerts(session_date)
 
   for i, (name, ticker) in enumerate(tickers):
     ticker_start = time.time()
@@ -316,7 +358,7 @@ def run_cross_check():
         f"🕒 {datetime.now().strftime('%Y-%m-%d')}"
       )
       print(msg)
-      send_telegram_message(msg)
+      send_alert_once(sent_alerts, session_date, f"{ticker}:{result}", msg)
     elif result is None:
       fail_count += 1
 

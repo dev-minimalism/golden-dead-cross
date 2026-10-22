@@ -4,3 +4,4 @@
 failed_tickers.log
 snp500_monitor.log
 *.log
+*_sent_alerts.json

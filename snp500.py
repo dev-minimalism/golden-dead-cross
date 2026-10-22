@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -28,6 +29,9 @@ TELEGRAM_CHAT_ID = os.getenv('SNP500_GOLDEN_DEAD_CROSS_TELEGRAM_CHAT_ID')
 NY_TZ = ZoneInfo('America/New_York')
 MARKET_OPEN = dtime(9, 30)
 MARKET_CLOSE = dtime(16, 0)
+
+# 당일 이미 보낸 알림 기록 (같은 신호 중복 전송 방지)
+SENT_ALERTS_FILE = 'snp500_sent_alerts.json'
 
 
 def fix_ticker(ticker):
@@ -108,7 +112,7 @@ def check_cross(ticker):
 def send_telegram_message(message):
   if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     logger.warning("Telegram credentials not set - message not sent")
-    return
+    return False
 
   url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
   payload = {
@@ -120,10 +124,44 @@ def send_telegram_message(message):
     response = requests.post(url, data=payload, timeout=10)
     if response.status_code != 200:
       logger.error(f"Telegram error: {response.text}")
-    else:
-      logger.debug("Telegram message sent successfully")
+      return False
+    logger.debug("Telegram message sent successfully")
+    return True
   except Exception as e:
     logger.error(f"Telegram exception: {e}")
+    return False
+
+
+# 당일 보낸 알림 불러오기 (날짜가 바뀌면 빈 기록으로 시작)
+def load_sent_alerts(session_date):
+  try:
+    with open(SENT_ALERTS_FILE, encoding='utf-8') as f:
+      data = json.load(f)
+    if data.get('date') == session_date:
+      return set(data.get('sent', []))
+  except FileNotFoundError:
+    pass
+  except Exception as e:
+    logger.warning(f"Failed to load {SENT_ALERTS_FILE}: {e}")
+  return set()
+
+
+def save_sent_alerts(session_date, sent_alerts):
+  try:
+    with open(SENT_ALERTS_FILE, 'w', encoding='utf-8') as f:
+      json.dump({'date': session_date, 'sent': sorted(sent_alerts)}, f)
+  except Exception as e:
+    logger.warning(f"Failed to save {SENT_ALERTS_FILE}: {e}")
+
+
+# 같은 날 같은 종목·신호는 한 번만 전송
+def send_alert_once(sent_alerts, session_date, key, message):
+  if key in sent_alerts:
+    logger.info(f"{key}: already alerted on {session_date} - skipped")
+    return
+  if send_telegram_message(message):
+    sent_alerts.add(key)
+    save_sent_alerts(session_date, sent_alerts)
 
 
 # Heartbeat 기능
@@ -158,6 +196,10 @@ def run_cross_check():
   dead_crosses = []
   failed_count = 0
 
+  # 미국장 기준 날짜 (뉴욕 시간)
+  session_date = datetime.now(NY_TZ).strftime('%Y-%m-%d')
+  sent_alerts = load_sent_alerts(session_date)
+
   for i, (ticker, company_name) in enumerate(ticker_pairs):
     ticker_start = time.time()
     fixed_ticker = fix_ticker(ticker)
@@ -172,7 +214,7 @@ def run_cross_check():
         f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
       )
       logger.info(f"Golden Cross: {ticker} ({company_name})")
-      send_telegram_message(msg)
+      send_alert_once(sent_alerts, session_date, f"{ticker}:golden", msg)
     elif result == 'dead':
       dead_crosses.append((ticker, price))
       msg = (
@@ -182,7 +224,7 @@ def run_cross_check():
         f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
       )
       logger.info(f"Dead Cross: {ticker} ({company_name})")
-      send_telegram_message(msg)
+      send_alert_once(sent_alerts, session_date, f"{ticker}:dead", msg)
     elif price is None:
       failed_count += 1
 
