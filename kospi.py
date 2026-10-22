@@ -359,7 +359,7 @@ def run_cross_check():
       )
       print(msg)
       send_alert_once(sent_alerts, session_date, f"{ticker}:{result}", msg)
-    elif result is None:
+    elif price is None:
       fail_count += 1
 
     ticker_elapsed = time.time() - ticker_start

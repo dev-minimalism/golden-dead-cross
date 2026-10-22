@@ -50,7 +50,6 @@ To exercise a single ticker without the infinite loop, import the module and cal
 - `snp500.py` uses the `logging` module (→ `snp500_monitor.log` + stdout) and sends start/stop/error Telegram messages; `kospi.py` uses `print` and has none of that.
 - yfinance returns MultiIndex columns even for a single ticker, so `snp500.py` extracts scalars with `.iloc[0]` (e.g. `today['Close'].iloc[0]`). `pykrx` rows are plain, so `kospi.py` indexes directly.
 - `kospi.py` fetches 365 days and requires ≥200 rows; `snp500.py` fetches `3mo` and requires ≥25.
-- In `kospi.py`, `fail_count` is incremented whenever `result is None`, which includes "no cross" results with a valid price, so its failure count is inflated.
 
 ## Conventions
 
