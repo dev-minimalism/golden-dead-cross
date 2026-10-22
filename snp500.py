@@ -2,7 +2,8 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, time as dtime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -22,6 +23,11 @@ logger = logging.getLogger(__name__)
 # Telegram 설정
 TELEGRAM_TOKEN = os.getenv('SNP500_GOLDEN_DEAD_CROSS_TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('SNP500_GOLDEN_DEAD_CROSS_TELEGRAM_CHAT_ID')
+
+# 미국 정규장 (뉴욕 시간)
+NY_TZ = ZoneInfo('America/New_York')
+MARKET_OPEN = dtime(9, 30)
+MARKET_CLOSE = dtime(16, 0)
 
 
 def fix_ticker(ticker):
@@ -202,12 +208,11 @@ def run_cross_check():
   send_telegram_message(summary_msg)
 
 
-def should_run_now():
-  now = datetime.now()
+def should_run_now(now=None):
+  # 미국 동부 시간 기준으로 판단하므로 서머타임과 요일이 자동으로 반영됨
+  now = (now or datetime.now(NY_TZ)).astimezone(NY_TZ)
   is_weekday = now.weekday() < 5  # Monday to Friday
-  is_trading_hours = (now.hour > 22 or (
-      now.hour == 22 and now.minute >= 30)) or (
-                         now.hour < 5)  # 10:30 PM to 5:00 AM KST
+  is_trading_hours = MARKET_OPEN <= now.time() < MARKET_CLOSE
   return is_weekday and is_trading_hours
 
 
