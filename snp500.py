@@ -6,6 +6,7 @@ import time
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
 
+import holidays
 import pandas as pd
 import requests
 import yfinance as yf
@@ -29,6 +30,7 @@ TELEGRAM_CHAT_ID = os.getenv('SNP500_GOLDEN_DEAD_CROSS_TELEGRAM_CHAT_ID')
 NY_TZ = ZoneInfo('America/New_York')
 MARKET_OPEN = dtime(9, 30)
 MARKET_CLOSE = dtime(16, 0)
+NYSE_HOLIDAYS = holidays.NYSE()  # 연도는 조회할 때 자동으로 확장됨
 
 # 당일 이미 보낸 알림 기록 (같은 신호 중복 전송 방지)
 SENT_ALERTS_FILE = 'snp500_sent_alerts.json'
@@ -266,8 +268,9 @@ def should_run_now(now=None):
   # 미국 동부 시간 기준으로 판단하므로 서머타임과 요일이 자동으로 반영됨
   now = (now or datetime.now(NY_TZ)).astimezone(NY_TZ)
   is_weekday = now.weekday() < 5  # Monday to Friday
+  is_holiday = now.date() in NYSE_HOLIDAYS
   is_trading_hours = MARKET_OPEN <= now.time() < MARKET_CLOSE
-  return is_weekday and is_trading_hours
+  return is_weekday and not is_holiday and is_trading_hours
 
 
 if __name__ == "__main__":

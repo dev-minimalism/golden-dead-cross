@@ -9,6 +9,7 @@ DateTime==5.5
 Deprecated==1.2.18
 fonttools==4.59.0
 frozendict==2.4.6
+holidays==0.107
 html5lib==1.1
 idna==3.10
 kiwisolver==1.4.8
