@@ -1,6 +1,6 @@
 # golden-dead-cross
 
-[![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![yfinance](https://img.shields.io/badge/yfinance-410093)](https://pypi.org/project/yfinance/)
 [![pykrx](https://img.shields.io/badge/pykrx-0A5BAA)](https://github.com/sharebook-kr/pykrx)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
@@ -24,6 +24,11 @@ KOSPI 200과 S&P 500 종목의 **골든크로스 / 데드크로스**(5일 이동
 
 > `kospi.py`는 서버 로컬 시간으로 판단하므로 서버 시간대가 KST여야 합니다. `snp500.py`는 뉴욕 시간으로 바꿔서 판단하므로 서버 시간대와 상관없이 서머타임이 반영됩니다. 미국 공휴일은 따로 거르지 않습니다.
 
+## 요구 사항
+
+- Python 3.11 이상 (`requirements.txt`의 numpy 2.3이 3.11 이상을 요구합니다)
+- 텔레그램 봇 토큰과 알림을 받을 채팅 ID
+
 ## 설치
 
 ```bash
@@ -31,6 +36,14 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## 텔레그램 봇 준비
+
+1. 텔레그램에서 [@BotFather](https://t.me/BotFather)에게 `/newbot`을 보내 봇을 만들고 토큰을 받습니다.
+2. 만든 봇에게 아무 메시지나 보내거나, 봇을 알림 받을 그룹에 초대합니다.
+3. `https://api.telegram.org/bot<토큰>/getUpdates`를 열어 응답의 `message.chat.id` 값을 확인합니다. 이 값이 채팅 ID입니다.
+
+두 스크립트에 같은 봇과 채팅을 써도 되고, 따로 만들어도 됩니다.
 
 ## 환경 변수
 
@@ -63,6 +76,40 @@ nohup python3 kospi.py > output_files/logs/kospi_nohup.out 2>&1 &
 nohup python3 snp500.py > output_files/logs/snp500_nohup.out 2>&1 &
 ```
 
+### 종료
+
+```bash
+pgrep -fl "kospi.py|snp500.py"   # PID 확인
+kill -INT <PID>
+```
+
+`snp500.py`는 `Ctrl+C`나 `kill -INT`로 종료하면 텔레그램으로 중단 메시지를 보냅니다. 그냥 `kill`(SIGTERM)로 종료하면 메시지 없이 끝납니다.
+
+## 알림 예시
+
+`snp500.py`:
+
+```
+📈 AAPL (Apple Inc.)
+➡️ Golden Cross 발생
+💰 현재가: $230.15
+🕒 2026-10-21 23:40
+```
+
+`kospi.py`:
+
+```
+📈 삼성전자 (005930) has a Golden Cross signal.
+🕒 2026-10-21
+```
+
+이 밖에 `snp500.py`는 시작·중단·오류 메시지와 점검마다 요약(골든/데드크로스 개수, 실패 개수, 소요 시간)을 보내고, 두 스크립트 모두 1시간마다 heartbeat 메시지를 보냅니다.
+
+## 종목 목록
+
+- **KOSPI 200**: `kospi.py`의 `get_kospi200_tickers()` 안에 `종목명 , 종목코드` 형식으로 200개가 적혀 있습니다. 지수 구성 종목이 바뀌면 이 목록을 직접 고쳐야 합니다.
+- **S&P 500**: 점검할 때마다 [Wikipedia 목록](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies)에서 가져오므로 따로 관리할 필요가 없습니다. `BRK.B` 같은 종목은 yfinance 형식(`BRK-B`)으로 바꿔서 조회합니다.
+
 ## 로그 파일
 
 | 파일 | 내용 |
@@ -73,6 +120,14 @@ nohup python3 snp500.py > output_files/logs/snp500_nohup.out 2>&1 &
 | `failed_kospi_tickers.log` | KOSPI 데이터 조회 실패 종목 |
 
 `kospi.py`는 로그를 파일에 남기지 않고 표준 출력으로만 출력합니다.
+
+## 주의 사항
+
+- **같은 알림이 반복됩니다.** 일봉 기준으로 판단하는데 장중 10분마다 점검하므로, 크로스가 난 날에는 같은 종목 알림이 점검할 때마다 다시 옵니다.
+- **장중 신호는 확정이 아닙니다.** 당일 일봉은 아직 진행 중이라 현재가로 계산합니다. 장중에 났던 신호가 종가 기준으로는 사라질 수 있습니다.
+- **휴장일을 거르지 않습니다.** 한국·미국 공휴일에도 평일이면 점검합니다. 이때는 새 일봉이 없어 전 거래일 기준 결과가 다시 나옵니다.
+- **`kospi.py`는 1년 치 데이터가 200거래일 이상인 종목만 점검합니다.** 상장한 지 1년이 안 된 종목은 조회 실패로 처리됩니다.
+- 이 스크립트의 알림은 투자 조언이 아닙니다.
 
 ## requirements.txt 갱신
 
