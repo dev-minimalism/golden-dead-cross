@@ -1,9 +1,9 @@
+# golden-dead-cross
+
 [![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![yfinance](https://img.shields.io/badge/yfinance-410093)](https://pypi.org/project/yfinance/)
 [![pykrx](https://img.shields.io/badge/pykrx-0A5BAA)](https://github.com/sharebook-kr/pykrx)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
-
-# golden-dead-cross
 
 KOSPI 200과 S&P 500 종목의 **골든크로스 / 데드크로스**(5일 이동평균선 × 20일 이동평균선)를 장중에 주기적으로 점검하고, 신호가 발생하면 텔레그램으로 알림을 보내는 스크립트입니다.
 
