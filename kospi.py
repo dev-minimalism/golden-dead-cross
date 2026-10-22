@@ -1,3 +1,4 @@
+import holidays
 import json
 import os
 import requests
@@ -12,6 +13,9 @@ TELEGRAM_CHAT_ID = os.getenv('KOSPI_GOLDEN_DEAD_CROSS_TELEGRAM_CHAT_ID')
 
 # 당일 이미 보낸 알림 기록 (같은 신호 중복 전송 방지)
 SENT_ALERTS_FILE = 'kospi_sent_alerts.json'
+
+# 한국거래소 휴장일 (연도는 조회할 때 자동으로 확장됨)
+KRX_HOLIDAYS = holidays.XKRX()
 
 
 # ===== 하드코딩된 KOSPI200 일부 (전체 확장 가능) =====
@@ -375,11 +379,12 @@ def run_cross_check():
   print(f"❌ Failed tickers: {fail_count}")
 
 
-def should_run_now():
-  now = datetime.now()
+def should_run_now(now=None):
+  now = now or datetime.now()
   return (
       now.weekday() < 5 and  # 월(0) ~ 금(4)
-      9 <= now.hour < 16  # 오전 9시 ~ 오후 2:59까지
+      now.date() not in KRX_HOLIDAYS and  # 한국거래소 휴장일 제외
+      9 <= now.hour < 16  # 오전 9시 ~ 오후 3:59까지
   )
 
 
